@@ -20,192 +20,301 @@
 
 package org.apache.hadoop.hbase.search;
 
+import java.io.File;
 import java.io.IOException;
+import java.io.RandomAccessFile;
+import java.lang.reflect.Method;
+import java.nio.BufferUnderflowException;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileChannel.MapMode;
+import java.security.AccessController;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hbase.zookeeper.ClusterStatusTracker;
+import org.apache.hadoop.hdfs.DFSClient;
+import org.apache.lucene.store.AlreadyClosedException;
 import org.apache.lucene.store.BufferedIndexInput;
+import org.apache.lucene.store.BufferedIndexOutput;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.IndexOutput;
+import org.apache.lucene.store.MMapDirectory;
+import org.apache.lucene.store.SimpleFSDirectory;
 
 /**
  * An HDFS based Lucene Directory implementation.
+ * 
+ * MMap'ing the block file is used for efficiency, 
+ * however it's recommended only for 64-bit Unix OS systems
  */
 public class HDFSDirectory extends Directory {
   private static final Log LOG = LogFactory.getLog(HDFSDirectory.class);
   private FileSystem fileSystem;
-  private String path;
-  
+  private String rootPath;
+
   public HDFSDirectory(FileSystem fileSystem, String path) throws IOException {
     this.fileSystem = fileSystem;
-    this.path = path;
+    this.rootPath = path;
     setLockFactory(new HDFSLockFactory(path, fileSystem));
   }
   
+  @Override
   public IndexOutput createOutput(String name) throws IOException {
     return new HDFSIndexOutput(getPath(name));
   }
-  
-  // nocommit: we can reuse the underlying FSDataOutputStream
-  // across opening the same file
-  protected class HDFSIndexOutput extends IndexOutput {
+
+  protected class HDFSIndexOutput extends BufferedIndexOutput {
     private Path path;
     private FSDataOutputStream output;
-    
+
     public HDFSIndexOutput(Path path) throws IOException {
       this.path = path;
-      output = fileSystem.create(path);
+      short replication = fileSystem.getDefaultReplication();
+      Configuration conf = fileSystem.getConf();
+      int bufferSize = conf.getInt("io.file.buffer.size", 4096);
+      long blockSize = (long)32 * 1024 * 1024 * 1024;
+      output = fileSystem.create(path, false, bufferSize, replication, blockSize);
+    }
+
+    @Override
+    protected void flushBuffer(byte[] b, int offset, int len) throws IOException {
+      output.write(b, offset, len);
     }
     
-    public void writeByte(byte b) throws IOException {
-      output.write(b);
-    }
-    
-    public void writeBytes(byte[] b, int off, int len) throws IOException {
-      output.write(b, off, len);
-    }
-    
+    @Override
     public void flush() throws IOException {
+      super.flush();
       output.flush();
     }
     
+    @Override
     public void close() throws IOException {
-      LOG.info("close:"+path);
-      output.flush();
+      flush();
       output.close();
     }
-    
-    public long getFilePointer() {
-      try {
-        return output.getPos();
-      } catch (Exception ex) {
-        throw new RuntimeException(ex);
-      }
-    }
-    
+
     @Override
     public void seek(long pos) throws IOException {
       throw new UnsupportedOperationException();
     }
-    
+
     @Override
     public long length() throws IOException {
       return output.getPos();
     }
-    
+
     @Override
     public void setLength(long length) throws IOException {
       throw new UnsupportedOperationException();
     }
   }
   
+  @Override
   public void close() throws IOException {
-    //LOG.info("close:"+path);
-    //fileSystem.close();
+    isOpen = false;
   }
   
+  @Override
   public String[] listAll() throws IOException {
     List<String> files = new ArrayList<String>();
-    FileStatus[] statuses = fileSystem.listStatus(new Path(path));
+    FileStatus[] statuses = fileSystem.listStatus(new Path(rootPath));
     for (FileStatus status : statuses) {
       files.add(status.getPath().getName());
     }
-    return (String[])files.toArray(new String[0]);
+    return (String[]) files.toArray(new String[0]);
   }
   
-  public void sync(Collection<String> names) throws IOException {}
-  
+  @Override
+  public void sync(Collection<String> names) throws IOException {
+  }
+
+  @Override
   public long fileLength(String name) throws IOException {
-    return fileSystem.getFileStatus(new Path(path, name)).getLen();
+    return fileSystem.getFileStatus(new Path(rootPath, name)).getLen();
   }
-  
+
+  @Override
   public boolean fileExists(String name) throws IOException {
-    return fileSystem.exists(new Path(path, name));
+    return fileSystem.exists(new Path(rootPath, name));
   }
   
+  @Override
   public long fileModified(String name) throws IOException {
-    return fileSystem.getFileStatus(new Path(path, name))
+    return fileSystem.getFileStatus(new Path(rootPath, name))
         .getModificationTime();
   }
   
+  @Override
   public void touchFile(String name) throws IOException {
     throw new UnsupportedOperationException();
   }
-  
+
   public void deleteFile(String name) throws IOException {
     Path path = getPath(name);
     boolean deleted = fileSystem.delete(path, false);
   }
   
   private Path getPath(String name) {
-    return new Path(path + "/" + name);
+    return new Path(rootPath + "/" + name);
   }
   
-  protected class HDFSIndexInput extends BufferedIndexInput {
-    private Path path;
-    private FSDataInputStream input;
-    private long position;
-    private FileStatus fileStatus;
-    private boolean isClone;
+  @Override
+  public IndexInput openInput(String name) throws IOException {
+    return openInput(name, BufferedIndexInput.BUFFER_SIZE);
+  }
+
+  /** Creates an IndexInput for the file with the given name. */
+  @Override
+  public IndexInput openInput(String name, int bufferSize)
+      throws IOException {
+    Path path = getPath(name);
     
-    public HDFSIndexInput(Path path, int bufferSize) throws IOException {
-      super(bufferSize);
-      this.path = path;
-      input = fileSystem.open(path, bufferSize);
-      fileStatus = fileSystem.getFileStatus(path);
+    // open the HDFS input for obtain the 
+    // underlying block file
+    FSDataInputStream dataInput = fileSystem.open(path, bufferSize);
+    DFSClient.DFSInputStream dfsInput = (DFSClient.DFSInputStream)dataInput.getInput();
+
+    File file = dfsInput.getFile();
+    
+    if (file == null) {
+      throw new IOException("file is null");
     }
     
-    protected void readInternal(byte[] b, int offset, int length)
-        throws IOException {
+    RandomAccessFile raf = new RandomAccessFile(file, "r");
+    try {
+      return new HDFSMMapIndexInput(raf);
+    } finally {
+      raf.close();
+    }
+  }
+  
+  private class HDFSMMapIndexInput extends IndexInput {
+    private ByteBuffer buffer;
+    private final long length;
+    private boolean isClone = false;
+
+    private HDFSMMapIndexInput(RandomAccessFile raf) throws IOException {
+        this.length = raf.length();
+        this.buffer = raf.getChannel().map(MapMode.READ_ONLY, 0, length);
+    }
+
+    @Override
+    public byte readByte() throws IOException {
       try {
-        long position = getFilePointer();
-        input.read(position, b, offset, length);
-      } catch (IOException ioe) {
-        throw new IOException(path+"", ioe);
+        return buffer.get();
+      } catch (BufferUnderflowException e) {
+        throw new IOException("read past EOF");
+      }
+    }
+
+    @Override
+    public void readBytes(byte[] b, int offset, int len) throws IOException {
+      try {
+        buffer.get(b, offset, len);
+      } catch (BufferUnderflowException e) {
+        throw new IOException("read past EOF");
       }
     }
     
     @Override
-    public Object clone() {
-      HDFSIndexInput clone = (HDFSIndexInput)super.clone();
-      clone.isClone = true;
-      return clone;
+    public short readShort() throws IOException {
+      try {
+        return buffer.getShort();
+      } catch (BufferUnderflowException e) {
+        throw new IOException("read past EOF");
+      }
     }
-    
-    public void close() throws IOException {
-      if (!isClone) {
-        System.out.println("close:"+path);
-        input.close();
+
+    @Override
+    public int readInt() throws IOException {
+      try {
+        return buffer.getInt();
+      } catch (BufferUnderflowException e) {
+        throw new IOException("read past EOF");
+      }
+    }
+
+    @Override
+    public long readLong() throws IOException {
+      try {
+        return buffer.getLong();
+      } catch (BufferUnderflowException e) {
+        throw new IOException("read past EOF");
       }
     }
     
-    protected void seekInternal(long pos) throws IOException {
-      this.position = pos;
+    @Override
+    public long getFilePointer() {
+      return buffer.position();
     }
-    
+
+    @Override
+    public void seek(long pos) throws IOException {
+      buffer.position((int)pos);
+    }
+
+    @Override
     public long length() {
-      return fileStatus.getLen();
+      return length;
+    }
+
+    @Override
+    public Object clone() {
+      if (buffer == null)
+        throw new AlreadyClosedException("MMapIndexInput already closed");
+      HDFSMMapIndexInput clone = (HDFSMMapIndexInput)super.clone();
+      clone.isClone = true;
+      clone.buffer = buffer.duplicate();
+      return clone;
+    }
+
+    @Override
+    public void close() throws IOException {
+      // unmap the buffer (if enabled) and at least unset it for GC
+      try {
+        if (isClone || buffer == null) return;
+        cleanMapping(buffer);
+      } finally {
+        buffer = null;
+      }
     }
   }
   
-  public IndexInput openInput(String name) throws IOException {
-    return openInput(name, BufferedIndexInput.BUFFER_SIZE);
-  }
-  
-  /** Creates an IndexInput for the file with the given name. */
-  @Override
-  public IndexInput openInput(String name, int bufferSize) throws IOException {
-    Path path = getPath(name);
-    return new HDFSIndexInput(path, bufferSize);
+  final void cleanMapping(final ByteBuffer buffer) throws IOException {
+    if (MMapDirectory.UNMAP_SUPPORTED) {
+      try {
+        AccessController.doPrivileged(new PrivilegedExceptionAction<Object>() {
+          public Object run() throws Exception {
+            final Method getCleanerMethod = buffer.getClass()
+              .getMethod("cleaner");
+            getCleanerMethod.setAccessible(true);
+            final Object cleaner = getCleanerMethod.invoke(buffer);
+            if (cleaner != null) {
+              cleaner.getClass().getMethod("clean")
+                .invoke(cleaner);
+            }
+            return null;
+          }
+        });
+      } catch (PrivilegedActionException e) {
+        final IOException ioe = new IOException("unable to unmap the mapped buffer");
+        ioe.initCause(e.getCause());
+        throw ioe;
+      }
+    }
   }
 }

@@ -37,7 +37,7 @@ import org.apache.lucene.document.Field.Store;
  * across column families are added to a single Document.
  */
 // nocommit: this DocumentTransformer assumes that
-// the incoming KeyValue(s) are for the entire row
+// the incoming KeyValue(s) are for the entire row.
 // we may need to load the [entire] row from the 
 // HRegion
 public class DefaultDocumentTransformer implements DocumentTransformer {

@@ -64,7 +64,6 @@ import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.Version;
-import org.apache.lucene.util._TestUtil;
 
 public class LuceneCoprocessor extends BaseRegionObserverCoprocessor implements
     LuceneProtocol {
@@ -204,7 +203,7 @@ public class LuceneCoprocessor extends BaseRegionObserverCoprocessor implements
 
       // HDFSDirectory origDir = new HDFSDirectory(filesystem, origPath);
 
-      _TestUtil.checkIndex(directory, writer.getConfig().getCodecProvider());
+      //_TestUtil.checkIndex(directory, writer.getConfig().getCodecProvider());
       
       String dir1Path = getLucenePath(l);
       filesystem.mkdirs(new Path(dir1Path));

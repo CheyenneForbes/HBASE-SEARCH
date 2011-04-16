@@ -97,7 +97,7 @@ public class TestRegionObserverInterface {
   public static void tearDownAfterClass() throws Exception {
     util.shutdownMiniCluster();
   }
-
+  /**
   HRegion initHRegion (byte [] tableName, String callingMethod,
       Configuration conf, Class<?> implClass, byte [] ... families)
       throws IOException{
@@ -117,7 +117,7 @@ public class TestRegionObserverInterface {
     host.load(implClass, Priority.USER);
     return r;
   }
-
+  **/
   @Test
   public void testRegionObserver() throws IOException {
     byte[] TABLE = Bytes.toBytes(getClass().getName());

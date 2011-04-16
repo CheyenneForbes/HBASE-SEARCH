@@ -26,16 +26,14 @@ import org.apache.hadoop.hbase.search.LuceneProtocol.ScoreUID;
 import org.apache.hadoop.hbase.util.Bytes;
 
 public class TestDistributedSearch extends TestCase {
-  
-  
-  
   /**
-   * Test the writable serialization. 
+   * Test the writable serialization.
    */
   public void testWritables() throws Exception {
     ScoreUID[] uids = new ScoreUID[10];
-    for (int x=0; x < uids.length; x++) {
-      uids[x] = new ScoreUID((float)x, Bytes.toBytes(x), System.currentTimeMillis());
+    for (int x = 0; x < uids.length; x++) {
+      uids[x] = new ScoreUID((float) x, Bytes.toBytes(x),
+          System.currentTimeMillis());
     }
     LuceneProtocol.Results results = new LuceneProtocol.Results(25, uids);
     ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
@@ -43,11 +41,12 @@ public class TestDistributedSearch extends TestCase {
     results.write(dataOut);
 
     byte[] bytes = byteOut.toByteArray();
-    DataInputStream dataIn = new DataInputStream(new ByteArrayInputStream(bytes));
+    DataInputStream dataIn = new DataInputStream(
+        new ByteArrayInputStream(bytes));
     LuceneProtocol.Results inResults = new LuceneProtocol.Results();
     inResults.readFields(dataIn);
-    
-    for (int x=0; x < inResults.uids.length; x++) {
+
+    for (int x = 0; x < inResults.uids.length; x++) {
       assert inResults.uids[x].equals(uids[x]);
     }
   }

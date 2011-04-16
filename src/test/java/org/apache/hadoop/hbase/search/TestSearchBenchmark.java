@@ -105,29 +105,17 @@ public class TestSearchBenchmark {
   }
 
   private IndexSearcher buildLuceneIndex() throws Exception {
-    File luceneDir = new File("luceneindex");
+    File luceneDir = new File("/tmp/luceneindex");
     luceneDir.mkdirs();
     FileUtils.cleanDirectory(luceneDir);
     Directory dir = new MMapDirectory(luceneDir);
     Analyzer analyzer = new StandardAnalyzer(Version.LUCENE_40);
     IndexWriterConfig config = createConfig();
-    /**
-    IndexWriterConfig config = new IndexWriterConfig(Version.LUCENE_40,
-        analyzer);
-    
-    LogByteSizeMergePolicy mergePolicy = new LogByteSizeMergePolicy();
-    // compound files cannot be used with HDFS
-    mergePolicy.setUseCompoundFile(false);
-    config.setMergePolicy(mergePolicy);
-    config.setMergeScheduler(new SerialMergeScheduler());
-    config.setRAMBufferSizeMB(ramBufferSize);
-    **/
     return buildIndex(dir, config);
   }
 
   private IndexSearcher buildIndex(Directory dir, IndexWriterConfig config)
       throws Exception {
-    config.setMergeScheduler(new SerialMergeScheduler());
     final IndexWriter writer = new IndexWriter(dir, config);
     loadDocs(maxDocs, new Loader() {
       public void doc(Document doc) throws Exception {
@@ -204,7 +192,7 @@ public class TestSearchBenchmark {
     } catch (NoMoreDataException e) {
       // continue
     }
-    long finish = System.currentTimeMillis();
+    //long finish = System.currentTimeMillis();
     // System.out.println("Extraction took " + (finish - start) + " ms");
   }
 }

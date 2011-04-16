@@ -50,6 +50,7 @@
       <post>user@hbase.apache.org</post>
       <archive>http://mail-archives.apache.org/mod_mbox/hbase-user/</archive>
       <otherArchives>
+          <otherArchive>http://hbase.apache.org/mail/user/</otherArchive>
         <otherArchive>http://dir.gmane.org/gmane.comp.java.hadoop.hbase.user</otherArchive>
         <otherArchive>http://search-hadoop.com/?q=&amp;fc_project=HBase</otherArchive>
       </otherArchives>
@@ -61,6 +62,7 @@
       <post>dev@hbase.apache.org</post>
       <archive>http://mail-archives.apache.org/mod_mbox/hbase-dev/</archive>
       <otherArchives>
+          <otherArchive>http://hbase.apache.org/mail/dev/</otherArchive>
         <otherArchive>http://dir.gmane.org/gmane.comp.java.hadoop.hbase.devel</otherArchive>
         <otherArchive>http://search-hadoop.com/?q=&amp;fc_project=HBase</otherArchive>
       </otherArchives>
@@ -70,12 +72,18 @@
       <subscribe>commits-subscribe@hbase.apache.org</subscribe>
       <unsubscribe>commits-unsubscribe@hbase.apache.org</unsubscribe>
       <archive>http://mail-archives.apache.org/mod_mbox/hbase-commits/</archive>
+      <otherArchives>
+          <otherArchive>http://hbase.apache.org/mail/commits/</otherArchive>
+      </otherArchives>
     </mailingList>
     <mailingList>
       <name>Issues List</name>
       <subscribe>issues-subscribe@hbase.apache.org</subscribe>
       <unsubscribe>issues-unsubscribe@hbase.apache.org</unsubscribe>
       <archive>http://mail-archives.apache.org/mod_mbox/hbase-issues/</archive>
+      <otherArchives>
+          <otherArchive>http://hbase.apache.org/mail/issues/</otherArchive>
+      </otherArchives>
     </mailingList>
   </mailingLists>
 
@@ -522,7 +530,9 @@
     at revision 1034499 with this hdfs-895 patch:
     https://issues.apache.org/jira/secure/attachment/12459473/hdfs-895-branch-20-append.txt
     -->
-    <hadoop.version>0.20-append-r1057313</hadoop.version>
+    <!--<hadoop.version>0.20-append-r1057313</hadoop.version>-->
+    <!-- <hadoop.version>0.20.3</hadoop.version> -->
+    <hadoop.version>0.20.3-SNAPSHOT</hadoop.version>
     <jasper.version>5.5.23</jasper.version>
     <jaxb-api.version>2.1</jaxb-api.version>
     <jetty.version>6.1.26</jetty.version>
@@ -566,6 +576,36 @@
       Note: Both org.apache.avro:avro and com.sun.jersey:jersey-json depend on Jackson so the version
         is chosen which comes first in the list of dependencies (jersey in this case)
     -->
+    <dependency>
+      <groupId>org.apache.lucene</groupId>
+      <artifactId>lucene-core</artifactId>
+      <version>4.0-SNAPSHOT</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.lucene</groupId>
+      <artifactId>lucene-misc</artifactId>
+      <version>4.0-SNAPSHOT</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.lucene</groupId>
+      <artifactId>lucene-analyzers-common</artifactId>
+      <version>4.0-SNAPSHOT</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.lucene</groupId>
+      <artifactId>lucene-benchmark</artifactId>
+      <version>4.0-SNAPSHOT</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.commons</groupId>
+      <artifactId>commons-compress</artifactId>
+      <version>1.1</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.commons</groupId>
+      <artifactId>commons-io</artifactId>
+      <version>1.3.2</version>
+    </dependency>
 
     <!-- General dependencies -->
     <dependency>
@@ -625,7 +665,8 @@
     </dependency>
     <dependency>
       <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-core</artifactId>
+      <artifactId>hadoop-core-hbase-lucene</artifactId>
+      
       <version>${hadoop.version}</version>
       <exclusions>
         <exclusion>
@@ -828,7 +869,7 @@
     </dependency>
     <dependency>
       <groupId>org.apache.hadoop</groupId>
-      <artifactId>hadoop-test</artifactId>
+      <artifactId>hadoop-test-hbase-lucene</artifactId>
       <version>${hadoop.version}</version>
       <scope>test</scope>
     </dependency>
