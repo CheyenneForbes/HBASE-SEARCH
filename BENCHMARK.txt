@@ -1,0 +1,18 @@
+Benchmark Instructions
+
+git clone git://github.com/jasonrutherglen/HDFS-347-HBASE.git HDFS-347-HBASE
+
+cd HDFS-347-HBASE
+ant mvn-install
+cd ..
+
+cd HBASE-SEARCH
+cd lib
+./install-libs.sh
+cd ..
+cd wiki-en
+tar -jxvf 10000.bz2
+cd ..
+mvn test -Dtest=TestSearchBenchmark
+
+
