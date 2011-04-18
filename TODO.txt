@@ -1,0 +1,11 @@
+HBase Search TODO:
+
+Updated 4/18/2011
+
+* Verify unit tests for splitting work properly
+* Look at integrating Solr
+* Run search in a test cluster
+* Finish TestDistributedSearch test case
+* Examine if HDFSLockFactory is required, and whether it should be writing to HDFS or Zookeeper
+
+
