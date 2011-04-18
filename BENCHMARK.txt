@@ -6,6 +6,7 @@ cd HDFS-347-HBASE
 ant mvn-install
 cd ..
 
+git clone git://github.com/jasonrutherglen/HBASE-SEARCH.git HBASE-SEARCH
 cd HBASE-SEARCH
 cd lib
 ./install-libs.sh

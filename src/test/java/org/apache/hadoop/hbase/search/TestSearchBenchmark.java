@@ -171,12 +171,13 @@ public class TestSearchBenchmark {
 
   public void loadDocs(int max, Loader loader) throws Exception {
     // File("/home/j/HBASE-SEARCH/HBase-Search/enwiki-20070527-pages-articles.xml.bz2");
-    File file = new File("enwiki-20070527-pages-articles.xml.bz2");
+    //File file = new File("enwiki-20070527-pages-articles.xml.bz2");
+    File dir = new File("wiki-en/10000");
     DocMaker docMaker = new DocMaker();
     Properties properties = new Properties();
     properties.setProperty("content.source",
-        "org.apache.lucene.benchmark.byTask.feeds.EnwikiContentSource");
-    properties.setProperty("docs.file", file.getAbsolutePath());
+        "org.apache.lucene.benchmark.byTask.feeds.DirContentSource");
+    properties.setProperty("docs.dir", dir.getAbsolutePath());
     properties.setProperty("content.source.forever", "false");
     docMaker.setConfig(new Config(properties));
     docMaker.resetInputs();
