@@ -19,8 +19,6 @@
  */
 package org.apache.hadoop.hbase.search;
 
-import static org.junit.Assert.assertTrue;
-
 import java.io.IOException;
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
@@ -36,34 +34,23 @@ import org.apache.hadoop.hbase.HColumnDescriptor;
 import org.apache.hadoop.hbase.HRegionInfo;
 import org.apache.hadoop.hbase.HTableDescriptor;
 import org.apache.hadoop.hbase.MiniHBaseCluster;
+import org.apache.hadoop.hbase.client.Delete;
 import org.apache.hadoop.hbase.client.HBaseAdmin;
 import org.apache.hadoop.hbase.client.HTable;
 import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.regionserver.HRegion;
 import org.apache.hadoop.hbase.regionserver.RegionCoprocessorHost;
 import org.apache.hadoop.hbase.search.LuceneProtocol.Results;
+import org.apache.hadoop.hbase.search.LuceneProtocol.ScoreUID;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.util.JVMClusterUtil;
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.core.WhitespaceAnalyzer;
-import org.apache.lucene.document.Document;
-import org.apache.lucene.document.Field;
-import org.apache.lucene.document.Field.Index;
-import org.apache.lucene.document.Field.Store;
-import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.index.LogByteSizeMergePolicy;
-import org.apache.lucene.index.MultiFields;
 import org.apache.lucene.index.SerialMergeScheduler;
-import org.apache.lucene.index.Term;
-import org.apache.lucene.index.Terms;
-import org.apache.lucene.index.TermsEnum;
-import org.apache.lucene.search.TermQuery;
-import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.store.Directory;
-import org.apache.lucene.store.RAMDirectory;
-import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.Version;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
@@ -86,6 +73,7 @@ public class TestLuceneCoprocessor {
   static byte[][] families = new byte[][] { headersFam, bodyFam };
   static byte[] messages = Bytes.toBytes("messages");
   static byte[] tableName = Bytes.toBytes("lucene");
+  boolean deletesRan = false;
   /**
   @Test
   public void testAppendCodec() throws Exception {
@@ -141,12 +129,38 @@ public class TestLuceneCoprocessor {
   }
 
   /**
+   * Perform a query using Lucene, then delete
+   * the rows via HBase.  Then query Lucene
+   * again to insure that the rows were
+   * deleted there as well. 
+   */
+  @Test
+  public void testSXDelete() throws Exception {
+    HTable table = new HTable(util.getConfiguration(), tableName);
+    
+    byte[] row = Bytes.toBytes(Integer.toString(5));
+    LuceneProtocol protocol = table.coprocessorProxy(LuceneProtocol.class, row);
+    Results r = protocol.search("*:*", 10);
+    Assert.assertEquals(20, r.numFound);
+    
+    Results results = protocol.search("to:apple", 10);
+    Assert.assertEquals(10, results.numFound);
+    for (ScoreUID uid : results.uids) {
+      table.delete(new Delete(uid.row, uid.timestamp, null));
+    }
+    // all references to lucene should be removed
+    Results results2 = protocol.search("to:apple", 10);
+    Assert.assertEquals(0, results2.numFound);
+    deletesRan = true;
+  }
+  
+  /**
    * Tests flushing a region which is turn commits the Lucene index.
    */
+  /**
   @Test
   public void testRegionCommit() throws Exception {
     HTable table = new HTable(util.getConfiguration(), tableName);
-
     NumberFormat format = new DecimalFormat("00000");
     /**
      * for (int x = 100; x < 200; x++) { byte[] row =
@@ -154,6 +168,7 @@ public class TestLuceneCoprocessor {
      * "test hbase lucene"; if (x % 2 == 0) { s += " apple"; }
      * put.add(headersFam, to, Bytes.toBytes(s)); table.put(put); }
      **/
+  /**
     for (JVMClusterUtil.RegionServerThread t : cluster.getRegionServerThreads()) {
       for (HRegionInfo r : t.getRegionServer().getOnlineRegions()) {
         if (!Bytes.equals(r.getTableDesc().getName(), tableName)) {
@@ -163,10 +178,11 @@ public class TestLuceneCoprocessor {
             .getOnlineRegion(r.getRegionName()).getCoprocessorHost();
         HRegion region = t.getRegionServer().getOnlineRegion(r.getRegionName());
         region.flushcache();
+        
       }
     }
   }
-
+  **/
   @BeforeClass
   public static void setupBeforeClass() throws Exception {
     util.startMiniCluster(1);
@@ -208,11 +224,12 @@ public class TestLuceneCoprocessor {
      * scanner.close();
      **/
     // sleep here is an ugly hack to allow region transitions to finish
-    // Thread.sleep(5000);
+    Thread.sleep(5000);
   }
 
   @AfterClass
   public static void tearDownAfterClass() throws Exception {
+    System.out.println("tearDownAfterClass");
     util.shutdownMiniCluster();
   }
 
@@ -226,8 +243,12 @@ public class TestLuceneCoprocessor {
     LuceneProtocol protocol = table.coprocessorProxy(LuceneProtocol.class, row);
 
     Results results = protocol.search("to:lucene", 10);
+    //if (deletesRan) {
     Assert.assertEquals(20, results.numFound);
-
+    //} else {
+    //  Assert.assertEquals(20, results.numFound);
+    //}
+    
     results = protocol.search("to:apple", 10);
     Assert.assertEquals(10, results.numFound);
   }

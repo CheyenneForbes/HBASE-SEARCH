@@ -28,11 +28,6 @@ import org.apache.hadoop.hbase.ipc.CoprocessorProtocol;
 import org.apache.hadoop.io.Writable;
 
 public interface LuceneProtocol extends CoprocessorProtocol {
-  /**
-   * Delete rows from HBase that match the given query string.
-   */
-  public void delete(String queryString) throws Exception;
-
   public Results search(String queryString, int hits) throws Exception;
   
   /**

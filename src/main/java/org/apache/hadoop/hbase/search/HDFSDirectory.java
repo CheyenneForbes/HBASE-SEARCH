@@ -58,8 +58,8 @@ import org.apache.lucene.store.SimpleFSDirectory;
 /**
  * An HDFS based Lucene Directory implementation.
  * 
- * MMap'ing the block file is used for efficiency, 
- * however it's recommended only for 64-bit Unix OS systems
+ * MMap'ing the block file is used for efficiency, however it's recommended only
+ * for 64-bit Unix OS systems
  */
 public class HDFSDirectory extends Directory {
   private static final Log LOG = LogFactory.getLog(HDFSDirectory.class);
@@ -71,7 +71,7 @@ public class HDFSDirectory extends Directory {
     this.rootPath = path;
     setLockFactory(new HDFSLockFactory(path, fileSystem));
   }
-  
+
   @Override
   public IndexOutput createOutput(String name) throws IOException {
     return new HDFSIndexOutput(getPath(name));
@@ -86,21 +86,23 @@ public class HDFSDirectory extends Directory {
       short replication = fileSystem.getDefaultReplication();
       Configuration conf = fileSystem.getConf();
       int bufferSize = conf.getInt("io.file.buffer.size", 4096);
-      long blockSize = (long)32 * 1024 * 1024 * 1024;
-      output = fileSystem.create(path, false, bufferSize, replication, blockSize);
+      long blockSize = (long) 32 * 1024 * 1024 * 1024;
+      output = fileSystem.create(path, false, bufferSize, replication,
+          blockSize);
     }
 
     @Override
-    protected void flushBuffer(byte[] b, int offset, int len) throws IOException {
+    protected void flushBuffer(byte[] b, int offset, int len)
+        throws IOException {
       output.write(b, offset, len);
     }
-    
+
     @Override
     public void flush() throws IOException {
       super.flush();
       output.flush();
     }
-    
+
     @Override
     public void close() throws IOException {
       flush();
@@ -122,12 +124,12 @@ public class HDFSDirectory extends Directory {
       throw new UnsupportedOperationException();
     }
   }
-  
+
   @Override
   public void close() throws IOException {
     isOpen = false;
   }
-  
+
   @Override
   public String[] listAll() throws IOException {
     List<String> files = new ArrayList<String>();
@@ -137,7 +139,7 @@ public class HDFSDirectory extends Directory {
     }
     return (String[]) files.toArray(new String[0]);
   }
-  
+
   @Override
   public void sync(Collection<String> names) throws IOException {
   }
@@ -151,13 +153,13 @@ public class HDFSDirectory extends Directory {
   public boolean fileExists(String name) throws IOException {
     return fileSystem.exists(new Path(rootPath, name));
   }
-  
+
   @Override
   public long fileModified(String name) throws IOException {
     return fileSystem.getFileStatus(new Path(rootPath, name))
         .getModificationTime();
   }
-  
+
   @Override
   public void touchFile(String name) throws IOException {
     throw new UnsupportedOperationException();
@@ -167,11 +169,11 @@ public class HDFSDirectory extends Directory {
     Path path = getPath(name);
     boolean deleted = fileSystem.delete(path, false);
   }
-  
+
   private Path getPath(String name) {
     return new Path(rootPath + "/" + name);
   }
-  
+
   @Override
   public IndexInput openInput(String name) throws IOException {
     return openInput(name, BufferedIndexInput.BUFFER_SIZE);
@@ -179,37 +181,37 @@ public class HDFSDirectory extends Directory {
 
   /** Creates an IndexInput for the file with the given name. */
   @Override
-  public IndexInput openInput(String name, int bufferSize)
-      throws IOException {
+  public IndexInput openInput(String name, int bufferSize) throws IOException {
     Path path = getPath(name);
-    
-    // open the HDFS input for obtain the 
+    // open the HDFS input to obtain the
     // underlying block file
-    FSDataInputStream dataInput = fileSystem.open(path, bufferSize);
-    DFSClient.DFSInputStream dfsInput = (DFSClient.DFSInputStream)dataInput.getInput();
-
-    File file = dfsInput.getFile();
-    
-    if (file == null) {
-      throw new IOException("file is null");
-    }
-    
-    RandomAccessFile raf = new RandomAccessFile(file, "r");
+    final FSDataInputStream dataInput = fileSystem.open(path, bufferSize);
+    final DFSClient.DFSInputStream dfsInput = (DFSClient.DFSInputStream) dataInput
+        .getInput();
     try {
-      return new HDFSMMapIndexInput(raf);
+      File file = dfsInput.getFile();
+      if (file == null) {
+        throw new IOException("file is null");
+      }
+      RandomAccessFile raf = new RandomAccessFile(file, "r");
+      try {
+        return new HDFSMMapIndexInput(raf);
+      } finally {
+        raf.close();
+      }
     } finally {
-      raf.close();
+      dfsInput.close();
     }
   }
-  
+
   private class HDFSMMapIndexInput extends IndexInput {
     private ByteBuffer buffer;
     private final long length;
     private boolean isClone = false;
 
     private HDFSMMapIndexInput(RandomAccessFile raf) throws IOException {
-        this.length = raf.length();
-        this.buffer = raf.getChannel().map(MapMode.READ_ONLY, 0, length);
+      this.length = raf.length();
+      this.buffer = raf.getChannel().map(MapMode.READ_ONLY, 0, length);
     }
 
     @Override
@@ -229,7 +231,7 @@ public class HDFSDirectory extends Directory {
         throw new IOException("read past EOF");
       }
     }
-    
+
     @Override
     public short readShort() throws IOException {
       try {
@@ -256,7 +258,7 @@ public class HDFSDirectory extends Directory {
         throw new IOException("read past EOF");
       }
     }
-    
+
     @Override
     public long getFilePointer() {
       return buffer.position();
@@ -264,7 +266,7 @@ public class HDFSDirectory extends Directory {
 
     @Override
     public void seek(long pos) throws IOException {
-      buffer.position((int)pos);
+      buffer.position((int) pos);
     }
 
     @Override
@@ -276,7 +278,7 @@ public class HDFSDirectory extends Directory {
     public Object clone() {
       if (buffer == null)
         throw new AlreadyClosedException("MMapIndexInput already closed");
-      HDFSMMapIndexInput clone = (HDFSMMapIndexInput)super.clone();
+      HDFSMMapIndexInput clone = (HDFSMMapIndexInput) super.clone();
       clone.isClone = true;
       clone.buffer = buffer.duplicate();
       return clone;
@@ -286,32 +288,33 @@ public class HDFSDirectory extends Directory {
     public void close() throws IOException {
       // unmap the buffer (if enabled) and at least unset it for GC
       try {
-        if (isClone || buffer == null) return;
+        if (isClone || buffer == null)
+          return;
         cleanMapping(buffer);
       } finally {
         buffer = null;
       }
     }
   }
-  
+
   final void cleanMapping(final ByteBuffer buffer) throws IOException {
     if (MMapDirectory.UNMAP_SUPPORTED) {
       try {
         AccessController.doPrivileged(new PrivilegedExceptionAction<Object>() {
           public Object run() throws Exception {
-            final Method getCleanerMethod = buffer.getClass()
-              .getMethod("cleaner");
+            final Method getCleanerMethod = buffer.getClass().getMethod(
+                "cleaner");
             getCleanerMethod.setAccessible(true);
             final Object cleaner = getCleanerMethod.invoke(buffer);
             if (cleaner != null) {
-              cleaner.getClass().getMethod("clean")
-                .invoke(cleaner);
+              cleaner.getClass().getMethod("clean").invoke(cleaner);
             }
             return null;
           }
         });
       } catch (PrivilegedActionException e) {
-        final IOException ioe = new IOException("unable to unmap the mapped buffer");
+        final IOException ioe = new IOException(
+            "unable to unmap the mapped buffer");
         ioe.initCause(e.getCause());
         throw ioe;
       }

@@ -576,6 +576,7 @@
       Note: Both org.apache.avro:avro and com.sun.jersey:jersey-json depend on Jackson so the version
         is chosen which comes first in the list of dependencies (jersey in this case)
     -->
+    <!-- Lucene -->
     <dependency>
       <groupId>org.apache.lucene</groupId>
       <artifactId>lucene-core</artifactId>

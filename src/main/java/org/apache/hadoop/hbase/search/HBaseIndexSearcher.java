@@ -28,9 +28,10 @@ import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.util.StringUtils;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
-import org.apache.lucene.document.FieldSelector;
 import org.apache.lucene.document.Field.Index;
 import org.apache.lucene.document.Field.Store;
+import org.apache.lucene.document.FieldSelector;
+import org.apache.lucene.document.FieldSelectorResult;
 import org.apache.lucene.index.CorruptIndexException;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexReader.ReaderContext;
@@ -76,49 +77,50 @@ public class HBaseIndexSearcher extends IndexSearcher {
 
   public Document doc(int docID) throws CorruptIndexException, IOException {
     IndexReader reader = getIndexReader();
-    return loadRow(reader.document(docID));
+    return loadRow(reader.document(docID), null);
+  }
+
+  public Document doc(int docID, FieldSelector fieldSelector)
+      throws CorruptIndexException, IOException {
+    IndexReader reader = getIndexReader();
+    return loadRow(reader.document(docID), fieldSelector);
   }
   
   /**
    * Load the actual document data from HBase.
    */
-  protected Document loadRow(Document d) throws CorruptIndexException,
+  protected Document loadRow(Document d, FieldSelector fieldSelector) throws CorruptIndexException,
       IOException {
     Field uidField = d.getField(LuceneCoprocessor.UID_FIELD);
     String uid = uidField.stringValue();
     String[] split = StringUtils.split(uid, '?', '_');
     byte[] row = Bytes.toBytes(split[0]);
     long timestamp = Long.parseLong(split[1]);
+    
     Get get = new Get(row);
     get.setTimeStamp(timestamp);
+    
     Document doc = new Document();
     Result result = region.get(get, null);
     NavigableMap<byte[], NavigableMap<byte[], byte[]>> map = result
         .getNoVersionMap();
-    for (Map.Entry<byte[], NavigableMap<byte[], byte[]>> entry : map.entrySet()) {
-      //byte[] key = entry.getKey();
-      NavigableMap<byte[], byte[]> value = entry.getValue();
-      //String keyStr = Bytes.toString(key);
-      for (Map.Entry<byte[],byte[]> entry2 : value.entrySet()) {
-        String keyStr2 = Bytes.toString(entry2.getKey());
-        String valStr2 = Bytes.toString(entry2.getValue());
-        //System.out.println("keyStr:"+keyStr+" keyStr2:"+keyStr2+" valStr2:"+valStr2);
-        Field field = new Field(keyStr2, valStr2, Store.YES, Index.ANALYZED);
-        doc.add(field);
+    for (Map.Entry<byte[], NavigableMap<byte[], byte[]>> family : map.entrySet()) {
+      NavigableMap<byte[], byte[]> value = family.getValue();
+      for (Map.Entry<byte[],byte[]> columns : value.entrySet()) {
+        String columnName = Bytes.toString(columns.getKey());
+        if ( (fieldSelector == null) ||
+            (fieldSelector != null && fieldSelector.accept(columnName).equals(FieldSelectorResult.LOAD))) {
+          String columnValue = Bytes.toString(columns.getValue());
+          Field field = new Field(columnName, columnValue, Store.YES, Index.ANALYZED);
+          doc.add(field);
+        }
       }
     }
+    // add the uid field (required)
     doc.add(uidField);
+    // add the row field (required)
     Field rowField = new Field("row", split[0], Store.YES, Index.NOT_ANALYZED);
     doc.add(rowField);
-    //System.out.println(d + "");
     return doc;
-  }
-
-  // nocommit: we should only load the qualifiers for a specific
-  // document using the fieldSelector
-  public Document doc(int docID, FieldSelector fieldSelector)
-      throws CorruptIndexException, IOException {
-    IndexReader reader = getIndexReader();
-    return loadRow(reader.document(docID, fieldSelector));
   }
 }

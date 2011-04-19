@@ -33,7 +33,6 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.HRegionInfo;
 import org.apache.hadoop.hbase.KeyValue;
-import org.apache.hadoop.hbase.client.Delete;
 import org.apache.hadoop.hbase.coprocessor.BaseRegionObserverCoprocessor;
 import org.apache.hadoop.hbase.coprocessor.RegionCoprocessorEnvironment;
 import org.apache.hadoop.hbase.regionserver.HRegion;
@@ -46,7 +45,6 @@ import org.apache.lucene.analysis.core.WhitespaceAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.index.CorruptIndexException;
 import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.index.IndexReader.AtomicReaderContext;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.index.LogByteSizeMergePolicy;
@@ -58,9 +56,7 @@ import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.index.codecs.CodecProvider;
 import org.apache.lucene.queryParser.QueryParser;
-import org.apache.lucene.search.Collector;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.Version;
@@ -83,6 +79,7 @@ public class LuceneCoprocessor extends BaseRegionObserverCoprocessor implements
   /**
    * Delete rows from this region based on the Lucene query.
    */
+  /**
   public void delete(String queryString) throws Exception {
     Query query = parseQuery(queryString);
     IndexReader reader = IndexReader.open(writer, true);
@@ -95,7 +92,7 @@ public class LuceneCoprocessor extends BaseRegionObserverCoprocessor implements
       reader.close();
     }
   }
-
+  **/
   protected Query parseQuery(String queryString) throws Exception {
     QueryParser qp = new QueryParser(Version.LUCENE_40, ROW_FIELD,
         writer.getAnalyzer());
@@ -106,6 +103,7 @@ public class LuceneCoprocessor extends BaseRegionObserverCoprocessor implements
   /**
    * Collector of documents that deletes from the underlying HRegion.
    */
+  /**
   private class DeleteHitCollector extends Collector {
     private IndexReader current;
     private HBaseIndexSearcher searcher;
@@ -141,7 +139,7 @@ public class LuceneCoprocessor extends BaseRegionObserverCoprocessor implements
       return true;
     }
   }
-
+  **/
   /**
    * Perform a query based on the given query string. Returns results up to the
    * given hits number.
@@ -200,10 +198,6 @@ public class LuceneCoprocessor extends BaseRegionObserverCoprocessor implements
 
       LOG.info("region:" + e.getRegion().getRegionNameAsString() + " l:"
           + l.getRegionNameAsString() + " r:" + r.getRegionNameAsString());
-
-      // HDFSDirectory origDir = new HDFSDirectory(filesystem, origPath);
-
-      //_TestUtil.checkIndex(directory, writer.getConfig().getCodecProvider());
       
       String dir1Path = getLucenePath(l);
       filesystem.mkdirs(new Path(dir1Path));
@@ -213,7 +207,6 @@ public class LuceneCoprocessor extends BaseRegionObserverCoprocessor implements
 
       IndexReader reader = IndexReader.open(directory, null, true,
           32, writer.getConfig().getCodecProvider());
-      //IndexReader reader = IndexReader.open(writer, true);
       Terms terms = MultiFields.getTerms(reader, ROW_FIELD);
       try {
         TermsEnum te = terms.iterator();
@@ -222,9 +215,6 @@ public class LuceneCoprocessor extends BaseRegionObserverCoprocessor implements
           BytesRef ref = te.next();
           if (ref == null) break;
         }
-        //if (startTerm != null) {
-        //  te.seek(startTerm);
-        //}
       } finally {
         //terms.close();
       }
@@ -315,13 +305,10 @@ public class LuceneCoprocessor extends BaseRegionObserverCoprocessor implements
   public void postOpen(RegionCoprocessorEnvironment e) {
     try {
       region = e.getRegion();
-      // String encodedName = region.getRegionInfo().getEncodedName();
       lucenePath = e.getRegion().getTableDesc().getValue("lucene.path");
       String regionName = region.getRegionNameAsString();
       FileSystem fileSystem = region.getFilesystem();
-      // lucenePath = region.getConf().get("lucene.path");
 
-      // String regionLucenePath = lucenePath + "/" + regionName;
       String regionLucenePath = getLucenePath(e.getRegion());
 
       //if (fileSystem.exists(new Path(regionLucenePath))) {
@@ -372,9 +359,15 @@ public class LuceneCoprocessor extends BaseRegionObserverCoprocessor implements
     }
     return terms;
   }
-
+  /**
+  private Term getUIDTerm(KeyValue kv) {
+    Bytes.
+    BytesRef uid = new BytesRef(Bytes);
+    return new Term(UID_FIELD, uid);
+  }
+  **/
   private Term getRowTerm(KeyValue kv) {
-    BytesRef row = new BytesRef(kv.getRow());
+    BytesRef row = new BytesRef(kv.getBuffer(), kv.getRowOffset(), kv.getRowLength());
     return new Term(ROW_FIELD, row);
   }
 
